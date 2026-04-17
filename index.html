@@ -24,7 +24,7 @@
           </p>
         </hgroup>
 
-        <form class="search-form" aria-label="リアルタイム検索">
+        <form id="search-form" class="search-form" aria-label="リアルタイム検索">
           <label class="visually-hidden" for="search-keyword">検索キーワード</label>
           <div class="search-form__controls">
             <input
@@ -37,10 +37,10 @@
               enterkeyhint="search"
             />
             <button
+              id="clear-search-keyword-button"
               type="button"
               class="search-form__clear-button interactive-control"
               aria-label="検索キーワードをクリア"
-              data-action="clear-input"
               disabled
             >
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -53,7 +53,7 @@
 
         <section class="history-panel" aria-labelledby="history-title">
           <h2 id="history-title" class="history-panel__title">検索履歴</h2>
-          <div data-history-content>
+          <div id="search-history-content">
             <p class="history-panel__empty">検索履歴はまだありません。</p>
           </div>
         </section>

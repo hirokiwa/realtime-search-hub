@@ -14,30 +14,41 @@ import { createSearchPageUrl } from '../services/searchNavigation.ts';
 import type { SearchHistoryEntry } from '../types/searchHistory.ts';
 
 const findSearchForm = (container: HTMLElement) =>
-  container.querySelector<HTMLFormElement>('.search-form');
+  container.querySelector<HTMLFormElement>('#search-form');
 
 const findSearchInput = (container: HTMLElement) =>
   container.querySelector<HTMLInputElement>('#search-keyword');
 
 const findHistoryContainer = (container: HTMLElement) =>
-  container.querySelector<HTMLElement>('[data-history-content]');
+  container.querySelector<HTMLElement>('#search-history-content');
 
 const findClearButton = (container: HTMLElement) =>
-  container.querySelector<HTMLButtonElement>('[data-action="clear-input"]');
-
-const findSearchHistoryLink = (element: HTMLElement) =>
-  element.closest<HTMLElement>('[data-action="search-history"]');
-
-const findHistoryDeleteButton = (element: HTMLElement) =>
-  element.closest<HTMLElement>('[data-action="delete-history"]');
-
-const findDragButton = (element: HTMLElement) =>
-  element.closest<HTMLElement>('[data-action="drag"]');
+  container.querySelector<HTMLButtonElement>('#clear-search-keyword-button');
 
 const findHistoryList = (container: HTMLElement) =>
-  container.querySelector<HTMLElement>('.history-list');
+  container.querySelector<HTMLElement>('#search-history-list');
 
-const extractEntryIdentifier = (element: HTMLElement | null) => element?.dataset.entryId ?? '';
+const createHistoryItemId = (entryIdentifier: string) => `search-history-item-${entryIdentifier}`;
+
+const createHistoryLinkId = (entryIdentifier: string) => `search-history-link-${entryIdentifier}`;
+
+const createHistoryDeleteButtonId = (entryIdentifier: string) =>
+  `search-history-delete-button-${entryIdentifier}`;
+
+const createHistoryDragButtonId = (entryIdentifier: string) =>
+  `search-history-drag-button-${entryIdentifier}`;
+
+const findHistoryItem = (container: HTMLElement, entryIdentifier: string) =>
+  container.querySelector<HTMLElement>(`#${createHistoryItemId(entryIdentifier)}`);
+
+const findHistoryLink = (container: HTMLElement, entryIdentifier: string) =>
+  container.querySelector<HTMLAnchorElement>(`#${createHistoryLinkId(entryIdentifier)}`);
+
+const findHistoryDeleteButton = (container: HTMLElement, entryIdentifier: string) =>
+  container.querySelector<HTMLButtonElement>(`#${createHistoryDeleteButtonId(entryIdentifier)}`);
+
+const findHistoryDragButton = (container: HTMLElement, entryIdentifier: string) =>
+  container.querySelector<HTMLButtonElement>(`#${createHistoryDragButtonId(entryIdentifier)}`);
 
 const getDraggingIdentifier = (container: HTMLElement) => container.dataset.draggingEntryId ?? '';
 
@@ -58,14 +69,16 @@ const escapeHtml = (value: string) =>
     .replaceAll("'", '&#39;');
 
 const createHistoryItemMarkup = (entry: SearchHistoryEntry) => `
-  <li class="history-list__item" data-entry-id="${entry.id}">
+  <li
+    id="${createHistoryItemId(entry.id)}"
+    class="history-list__item"
+  >
     <button
+      id="${createHistoryDragButtonId(entry.id)}"
       type="button"
       class="history-list__drag-button interactive-control"
       draggable="true"
       aria-label="「${escapeHtml(entry.keyword)}」の並び順を変更"
-      data-entry-id="${entry.id}"
-      data-action="drag"
     >
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <circle cx="9" cy="7" r="1.4" fill="currentColor" />
@@ -77,12 +90,11 @@ const createHistoryItemMarkup = (entry: SearchHistoryEntry) => `
       </svg>
     </button>
     <a
+      id="${createHistoryLinkId(entry.id)}"
       class="history-list__link interactive-control"
       href="${createSearchPageUrl(entry.keyword)}"
       target="_blank"
       rel="noopener noreferrer"
-      data-entry-id="${entry.id}"
-      data-action="search-history"
     >
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8" />
@@ -91,11 +103,10 @@ const createHistoryItemMarkup = (entry: SearchHistoryEntry) => `
       <span class="history-list__keyword">${escapeHtml(entry.keyword)}</span>
     </a>
     <button
+      id="${createHistoryDeleteButtonId(entry.id)}"
       type="button"
       class="history-list__delete-button interactive-control"
       aria-label="「${escapeHtml(entry.keyword)}」を履歴から削除"
-      data-entry-id="${entry.id}"
-      data-action="delete-history"
     >
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path d="M7 7L17 17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
@@ -113,7 +124,7 @@ const createHistoryListMarkup = (entries: readonly SearchHistoryEntry[]) => {
   }
 
   return `
-    <ul class="history-list" aria-label="検索履歴">
+    <ul id="search-history-list" class="history-list" aria-label="検索履歴">
       ${entries.map((entry) => createHistoryItemMarkup(entry)).join('')}
     </ul>
   `;
@@ -134,7 +145,7 @@ const getOrderedEntryIdentifiersFromDom = (container: HTMLElement) => {
   }
 
   return [...historyList.querySelectorAll<HTMLElement>('.history-list__item')].map((item) =>
-    extractEntryIdentifier(item),
+    item.id.replace('search-history-item-', ''),
   );
 };
 
@@ -151,10 +162,10 @@ const moveHistoryItemInDom = (
   }
 
   const sourceItem = historyList.querySelector<HTMLElement>(
-    `.history-list__item[data-entry-id="${sourceIdentifier}"]`,
+    `#${createHistoryItemId(sourceIdentifier)}`,
   );
   const targetItem = historyList.querySelector<HTMLElement>(
-    `.history-list__item[data-entry-id="${targetIdentifier}"]`,
+    `#${createHistoryItemId(targetIdentifier)}`,
   );
 
   if (sourceItem === null || targetItem === null || sourceItem === targetItem) {
@@ -205,6 +216,7 @@ const renderEntries = (container: HTMLElement) => {
 const saveEntries = (container: HTMLElement, entries: ReturnType<typeof loadSearchHistoryEntries>) => {
   saveSearchHistoryEntries(entries);
   renderEntries(container);
+  bindHistoryEvents(container);
 };
 
 const clearKeyword = (container: HTMLElement) => {
@@ -233,10 +245,8 @@ const submitKeyword = (container: HTMLElement) => {
 };
 
 const deleteHistoryEntry = (container: HTMLElement, entryIdentifier: string) => {
-  const historyListItem = container.querySelector<HTMLElement>(`[data-entry-id="${entryIdentifier}"]`);
   const nextEntries = removeSearchHistoryEntry(loadSearchHistoryEntries(), entryIdentifier);
 
-  historyListItem?.remove();
   saveEntries(container, nextEntries);
 };
 
@@ -256,24 +266,22 @@ const searchHistoryEntry = (entryIdentifier: string) => {
   }
 };
 
-const bindSubmitEvent = (container: HTMLElement) => {
-  container.addEventListener('submit', (event) => {
-    const target = event.target;
+const bindSearchFormEvent = (container: HTMLElement) => {
+  const searchForm = findSearchForm(container);
 
-    if (!(target instanceof HTMLFormElement) || !target.classList.contains('search-form')) {
-      return;
-    }
-
+  searchForm?.addEventListener('submit', (event) => {
     event.preventDefault();
     submitKeyword(container);
   });
 };
 
-const bindInputEvent = (container: HTMLElement) => {
-  container.addEventListener('input', (event) => {
-    const target = event.target;
+const bindSearchInputEvent = (container: HTMLElement) => {
+  const searchInput = findSearchInput(container);
 
-    if (!(target instanceof HTMLInputElement) || target.id !== 'search-keyword') {
+  searchInput?.addEventListener('input', (event) => {
+    const target = event.currentTarget;
+
+    if (!(target instanceof HTMLInputElement)) {
       return;
     }
 
@@ -281,63 +289,48 @@ const bindInputEvent = (container: HTMLElement) => {
   });
 };
 
-const bindClickEvent = (container: HTMLElement) => {
-  container.addEventListener('click', (event) => {
-    const target = event.target;
+const bindClearButtonEvent = (container: HTMLElement) => {
+  const clearButton = findClearButton(container);
 
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
-
-    const historyLink = findSearchHistoryLink(target);
-    const historyDeleteButton = findHistoryDeleteButton(target);
-    const clearButton = target.closest<HTMLElement>('[data-action="clear-input"]');
-
-    if (historyLink !== null) {
-      event.preventDefault();
-      searchHistoryEntry(extractEntryIdentifier(historyLink));
-    }
-
-    if (historyDeleteButton !== null) {
-      deleteHistoryEntry(container, extractEntryIdentifier(historyDeleteButton));
-    }
-
-    if (clearButton !== null) {
-      clearKeyword(container);
-    }
+  clearButton?.addEventListener('click', () => {
+    clearKeyword(container);
   });
 };
 
-const bindDragEvent = (container: HTMLElement) => {
-  container.addEventListener('dragstart', (event) => {
-    const target = event.target;
+const bindHistoryEntryEvents = (container: HTMLElement, entry: SearchHistoryEntry) => {
+  const historyLink = findHistoryLink(container, entry.id);
+  const historyDeleteButton = findHistoryDeleteButton(container, entry.id);
+  const historyDragButton = findHistoryDragButton(container, entry.id);
 
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
+  historyLink?.addEventListener('click', (event) => {
+    event.preventDefault();
+    searchHistoryEntry(entry.id);
+  });
 
-    const dragButton = findDragButton(target);
+  historyDeleteButton?.addEventListener('click', () => {
+    deleteHistoryEntry(container, entry.id);
+  });
 
-    if (dragButton === null || event.dataTransfer === null) {
+  historyDragButton?.addEventListener('dragstart', (event) => {
+    if (event.dataTransfer === null) {
       return;
     }
 
     event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', extractEntryIdentifier(dragButton));
-    setDraggingIdentifier(container, extractEntryIdentifier(dragButton));
-    dragButton.closest<HTMLElement>('.history-list__item')?.setAttribute('data-dragging', 'true');
+    event.dataTransfer.setData('text/plain', entry.id);
+    setDraggingIdentifier(container, entry.id);
+    findHistoryItem(container, entry.id)?.setAttribute('data-dragging', 'true');
   });
 
-  container.addEventListener('dragover', (event) => {
-    const target = event.target;
+  historyDragButton?.addEventListener('dragend', () => {
+    findHistoryItem(container, entry.id)?.removeAttribute('data-dragging');
+    clearDraggingIdentifier(container);
+  });
 
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
+  const historyItem = findHistoryItem(container, entry.id);
 
-    const historyListItem = target.closest<HTMLElement>('.history-list__item');
-
-    if (historyListItem === null || event.dataTransfer === null) {
+  historyItem?.addEventListener('dragover', (event) => {
+    if (event.dataTransfer === null) {
       return;
     }
 
@@ -346,21 +339,13 @@ const bindDragEvent = (container: HTMLElement) => {
     moveHistoryItemInDom(
       container,
       getDraggingIdentifier(container),
-      extractEntryIdentifier(historyListItem),
+      entry.id,
       event.clientY,
     );
   });
 
-  container.addEventListener('drop', (event) => {
-    const target = event.target;
-
-    if (!(target instanceof HTMLElement) || event.dataTransfer === null) {
-      return;
-    }
-
-    const historyListItem = target.closest<HTMLElement>('.history-list__item');
-
-    if (historyListItem === null) {
+  historyItem?.addEventListener('drop', (event) => {
+    if (event.dataTransfer === null) {
       return;
     }
 
@@ -368,26 +353,25 @@ const bindDragEvent = (container: HTMLElement) => {
     moveHistoryItemInDom(
       container,
       event.dataTransfer.getData('text/plain'),
-      extractEntryIdentifier(historyListItem),
+      entry.id,
       event.clientY,
     );
     reorderHistoryEntriesFromDom(container);
     clearDraggingIdentifier(container);
   });
+};
 
-  container.addEventListener('dragend', () => {
-    container
-      .querySelector<HTMLElement>('[data-dragging="true"]')
-      ?.removeAttribute('data-dragging');
-    clearDraggingIdentifier(container);
+const bindHistoryEvents = (container: HTMLElement) => {
+  loadSearchHistoryEntries().forEach((entry) => {
+    bindHistoryEntryEvents(container, entry);
   });
 };
 
 const bindEvents = (container: HTMLElement) => {
-  bindSubmitEvent(container);
-  bindInputEvent(container);
-  bindClickEvent(container);
-  bindDragEvent(container);
+  bindSearchFormEvent(container);
+  bindSearchInputEvent(container);
+  bindClearButtonEvent(container);
+  bindHistoryEvents(container);
 };
 
 export const mountApplication = (container: HTMLElement) => {
