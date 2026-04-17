@@ -1,26 +1,23 @@
 :root {
   color-scheme: light;
-  --color-background: #f2efe7;
-  --color-surface: #fffdf8;
-  --color-surface-strong: #f6efe3;
-  --color-text: #1f1a14;
-  --color-text-muted: #64584b;
-  --color-border: #d6c7b1;
-  --color-border-strong: #b78949;
-  --color-accent: #8b4d14;
-  --color-accent-strong: #6f3d0f;
-  --color-shadow: rgb(69 41 14 / 12%);
+  --color-background: #f6f6f6;
+  --color-surface: #ffffff;
+  --color-surface-strong: #fafafa;
+  --color-text: #1f1f1f;
+  --color-text-muted: #666666;
+  --color-border: #d7d7d7;
+  --color-accent: #222222;
   --font-family-base: "Hiragino Sans", "Yu Gothic", sans-serif;
-  --font-family-heading: "Hiragino Mincho ProN", "Yu Mincho", serif;
-  --radius-large: 28px;
-  --radius-medium: 18px;
-  --radius-small: 12px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
+  --radius-large: 12px;
+  --radius-medium: 8px;
+  --radius-small: 6px;
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-8: 20px;
   --transition-base: 160ms ease;
 }
 
@@ -36,9 +33,7 @@ html {
 
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgb(255 255 255 / 80%), transparent 38%),
-    linear-gradient(160deg, #efe7d6 0%, #f7f3eb 48%, #e8ded0 100%);
+  background: var(--color-background);
   color: var(--color-text);
   font-family: var(--font-family-base);
 }
@@ -88,8 +83,8 @@ ul {
 }
 
 .icon {
-  inline-size: 1.1rem;
-  block-size: 1.1rem;
+  inline-size: 1rem;
+  block-size: 1rem;
   flex: none;
 }
 
@@ -102,8 +97,8 @@ ul {
 }
 
 .interactive-control:is(:hover, :focus-visible) {
-  border-radius: var(--radius-medium);
-  scale: 1.03;
+  border-radius: var(--radius-small);
+  scale: 1.01;
   translate: 0 -1px;
 }
 
