@@ -123,6 +123,10 @@
   background: var(--color-surface);
 }
 
+.history-list__item[data-dragging="true"] {
+  opacity: 0.45;
+}
+
 .history-list__link {
   min-inline-size: 0;
   flex: 1;
@@ -156,6 +160,7 @@
 
   .search-form__input {
     padding: var(--space-3);
+    font-size: 16px;
   }
 
   .search-form__clear-button,

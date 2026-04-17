@@ -1,9 +1,9 @@
 import {
   appendSearchHistoryEntry,
   isKeywordEmpty,
-  moveSearchHistoryEntry,
   removeSearchHistoryEntry,
   sanitizeKeyword,
+  sortSearchHistoryEntriesByIdentifiers,
 } from '../domain/searchHistory.ts';
 import { openSearchPage } from '../services/searchNavigation.ts';
 import {
@@ -34,7 +34,20 @@ const findHistoryDeleteButton = (element: HTMLElement) =>
 const findDragButton = (element: HTMLElement) =>
   element.closest<HTMLElement>('[data-action="drag"]');
 
+const findHistoryList = (container: HTMLElement) =>
+  container.querySelector<HTMLElement>('.history-list');
+
 const extractEntryIdentifier = (element: HTMLElement | null) => element?.dataset.entryId ?? '';
+
+const getDraggingIdentifier = (container: HTMLElement) => container.dataset.draggingEntryId ?? '';
+
+const setDraggingIdentifier = (container: HTMLElement, entryIdentifier: string) => {
+  container.dataset.draggingEntryId = entryIdentifier;
+};
+
+const clearDraggingIdentifier = (container: HTMLElement) => {
+  delete container.dataset.draggingEntryId;
+};
 
 const escapeHtml = (value: string) =>
   value
@@ -113,6 +126,52 @@ const renderHistoryList = (
   container.innerHTML = createHistoryListMarkup(entries);
 };
 
+const getOrderedEntryIdentifiersFromDom = (container: HTMLElement) => {
+  const historyList = findHistoryList(container);
+
+  if (historyList === null) {
+    return [];
+  }
+
+  return [...historyList.querySelectorAll<HTMLElement>('.history-list__item')].map((item) =>
+    extractEntryIdentifier(item),
+  );
+};
+
+const moveHistoryItemInDom = (
+  container: HTMLElement,
+  sourceIdentifier: string,
+  targetIdentifier: string,
+  pointerClientY: number,
+) => {
+  const historyList = findHistoryList(container);
+
+  if (historyList === null || sourceIdentifier === targetIdentifier) {
+    return;
+  }
+
+  const sourceItem = historyList.querySelector<HTMLElement>(
+    `.history-list__item[data-entry-id="${sourceIdentifier}"]`,
+  );
+  const targetItem = historyList.querySelector<HTMLElement>(
+    `.history-list__item[data-entry-id="${targetIdentifier}"]`,
+  );
+
+  if (sourceItem === null || targetItem === null || sourceItem === targetItem) {
+    return;
+  }
+
+  const targetRect = targetItem.getBoundingClientRect();
+  const shouldInsertAfter = pointerClientY >= targetRect.top + targetRect.height / 2;
+  const nextSibling = shouldInsertAfter ? targetItem.nextElementSibling : targetItem;
+  const shouldKeepPosition =
+    nextSibling === sourceItem || targetItem.previousElementSibling === sourceItem;
+
+  if (!shouldKeepPosition) {
+    historyList.insertBefore(sourceItem, nextSibling);
+  }
+};
+
 const focusSearchInput = (container: HTMLElement) => {
   findSearchInput(container)?.focus();
 };
@@ -174,21 +233,17 @@ const submitKeyword = (container: HTMLElement) => {
 };
 
 const deleteHistoryEntry = (container: HTMLElement, entryIdentifier: string) => {
+  const historyListItem = container.querySelector<HTMLElement>(`[data-entry-id="${entryIdentifier}"]`);
   const nextEntries = removeSearchHistoryEntry(loadSearchHistoryEntries(), entryIdentifier);
 
+  historyListItem?.remove();
   saveEntries(container, nextEntries);
 };
 
-const reorderHistoryEntries = (
-  container: HTMLElement,
-  sourceIdentifier: string,
-  targetIdentifier: string,
-) => {
-  const nextEntries = moveSearchHistoryEntry(
-    loadSearchHistoryEntries(),
-    sourceIdentifier,
-    targetIdentifier,
-  );
+const reorderHistoryEntriesFromDom = (container: HTMLElement) => {
+  const currentEntries = loadSearchHistoryEntries();
+  const orderedIdentifiers = getOrderedEntryIdentifiersFromDom(container);
+  const nextEntries = sortSearchHistoryEntriesByIdentifiers(currentEntries, orderedIdentifiers);
 
   saveEntries(container, nextEntries);
 };
@@ -269,6 +324,8 @@ const bindDragEvent = (container: HTMLElement) => {
 
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', extractEntryIdentifier(dragButton));
+    setDraggingIdentifier(container, extractEntryIdentifier(dragButton));
+    dragButton.closest<HTMLElement>('.history-list__item')?.setAttribute('data-dragging', 'true');
   });
 
   container.addEventListener('dragover', (event) => {
@@ -286,6 +343,12 @@ const bindDragEvent = (container: HTMLElement) => {
 
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
+    moveHistoryItemInDom(
+      container,
+      getDraggingIdentifier(container),
+      extractEntryIdentifier(historyListItem),
+      event.clientY,
+    );
   });
 
   container.addEventListener('drop', (event) => {
@@ -302,12 +365,21 @@ const bindDragEvent = (container: HTMLElement) => {
     }
 
     event.preventDefault();
-
-    reorderHistoryEntries(
+    moveHistoryItemInDom(
       container,
       event.dataTransfer.getData('text/plain'),
       extractEntryIdentifier(historyListItem),
+      event.clientY,
     );
+    reorderHistoryEntriesFromDom(container);
+    clearDraggingIdentifier(container);
+  });
+
+  container.addEventListener('dragend', () => {
+    container
+      .querySelector<HTMLElement>('[data-dragging="true"]')
+      ?.removeAttribute('data-dragging');
+    clearDraggingIdentifier(container);
   });
 };
 

@@ -53,3 +53,16 @@ export const moveSearchHistoryEntry = (
     ...entriesWithoutSource.slice(insertIndex),
   ];
 };
+
+export const sortSearchHistoryEntriesByIdentifiers = (
+  entries: readonly SearchHistoryEntry[],
+  orderedIdentifiers: readonly string[],
+) => {
+  const entryMap = new Map(entries.map((entry) => [entry.id, entry]));
+
+  return orderedIdentifiers.flatMap((identifier) => {
+    const targetEntry = entryMap.get(identifier);
+
+    return targetEntry === undefined ? [] : [targetEntry];
+  });
+};
