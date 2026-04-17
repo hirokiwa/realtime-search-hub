@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <meta
+      name="description"
+      content="Search X Post without login"
+    />
+    <title>Realtime Search Hub</title>
+    <link rel="stylesheet" href="/src/styles/base.css" />
+    <link rel="stylesheet" href="/src/styles/home.css" />
+  </head>
+  <body>
+    <main class="page" data-application-root>
+      <section class="search-card" aria-labelledby="page-title">
+        <hgroup class="search-card__heading-group">
+          <h1 id="page-title" class="search-card__title">Realtime Search Hub</h1>
+          <p class="search-card__description">
+            Search X Post without login
+          </p>
+        </hgroup>
+
+        <form class="search-form" aria-label="リアルタイム検索">
+          <label class="visually-hidden" for="search-keyword">検索キーワード</label>
+          <div class="search-form__controls">
+            <input
+              id="search-keyword"
+              name="keyword"
+              class="search-form__input"
+              type="search"
+              autocomplete="off"
+              spellcheck="false"
+              enterkeyhint="search"
+            />
+            <button
+              type="button"
+              class="search-form__clear-button interactive-control"
+              aria-label="検索キーワードをクリア"
+              data-action="clear-input"
+              disabled
+            >
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M7 7L17 17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                <path d="M17 7L7 17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </button>
+            <button
+              type="submit"
+              class="search-form__submit-button interactive-control"
+            >
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8" />
+                <path d="M16 16L21 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+              <span>検索</span>
+            </button>
+          </div>
+        </form>
+
+        <section class="history-panel" aria-labelledby="history-title">
+          <h2 id="history-title" class="history-panel__title">検索履歴</h2>
+          <div data-history-content>
+            <p class="history-panel__empty">検索履歴はまだありません。</p>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
