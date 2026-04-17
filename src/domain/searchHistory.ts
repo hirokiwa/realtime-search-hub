@@ -16,10 +16,21 @@ export const sanitizeKeyword = (keyword: string) => keyword.trim();
 
 export const isKeywordEmpty = (keyword: string) => sanitizeKeyword(keyword).length === 0;
 
+const isSameKeyword = (sourceKeyword: string, targetKeyword: string) =>
+  sanitizeKeyword(sourceKeyword) === sanitizeKeyword(targetKeyword);
+
+const hasSearchHistoryEntry = (
+  entries: readonly SearchHistoryEntry[],
+  keyword: string,
+) => entries.some((entry) => isSameKeyword(entry.keyword, keyword));
+
 export const appendSearchHistoryEntry = (
   entries: readonly SearchHistoryEntry[],
   keyword: string,
-) => [...entries, createSearchHistoryEntry(sanitizeKeyword(keyword))];
+) =>
+  hasSearchHistoryEntry(entries, keyword)
+    ? [...entries]
+    : [...entries, createSearchHistoryEntry(sanitizeKeyword(keyword))];
 
 export const removeSearchHistoryEntry = (
   entries: readonly SearchHistoryEntry[],
