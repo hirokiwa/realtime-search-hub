@@ -14,6 +14,9 @@ import { createSearchPageUrl } from '../services/searchNavigation.ts';
 import type { SearchHistoryEntry } from '../types/searchHistory.ts';
 
 type ApplicationRootElement = HTMLElementTagNameMap['main'];
+const HISTORY_REORDER_DURATION_MS = 180;
+const HISTORY_REORDER_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+const DRAG_PREVIEW_ELEMENT_ID = 'history-drag-preview';
 
 const findSearchForm = (container: ApplicationRootElement) =>
   container.querySelector<HTMLFormElement>('#search-form');
@@ -52,8 +55,29 @@ const findHistoryDeleteButton = (container: ApplicationRootElement, entryIdentif
 const findHistoryDragButton = (container: ApplicationRootElement, entryIdentifier: string) =>
   container.querySelector<HTMLButtonElement>(`#${createHistoryDragButtonId(entryIdentifier)}`);
 
+const findDragPreview = () =>
+  document.querySelector<HTMLLIElement>(`#${DRAG_PREVIEW_ELEMENT_ID}`);
+
 const getDraggingIdentifier = (container: ApplicationRootElement) =>
   container.dataset.draggingEntryId ?? '';
+
+const getDraggingOffsetY = (container: ApplicationRootElement) =>
+  Number(container.dataset.draggingOffsetY ?? '0');
+
+const getDraggingItemHeight = (container: ApplicationRootElement) =>
+  Number(container.dataset.draggingItemHeight ?? '0');
+
+const getDraggingItemWidth = (container: ApplicationRootElement) =>
+  Number(container.dataset.draggingItemWidth ?? '0');
+
+const getDraggingItemLeft = (container: ApplicationRootElement) =>
+  Number(container.dataset.draggingItemLeft ?? '0');
+
+const getDraggingPointerY = (container: ApplicationRootElement) =>
+  Number(container.dataset.draggingPointerY ?? '0');
+
+const getLastReorderDirection = (container: ApplicationRootElement) =>
+  container.dataset.lastReorderDirection ?? '';
 
 const setDraggingIdentifier = (
   container: ApplicationRootElement,
@@ -62,8 +86,182 @@ const setDraggingIdentifier = (
   container.dataset.draggingEntryId = entryIdentifier;
 };
 
+const setDraggingMetrics = (
+  container: ApplicationRootElement,
+  offsetY: number,
+  itemHeight: number,
+  itemWidth: number,
+  itemLeft: number,
+  pointerY: number,
+) => {
+  container.dataset.draggingOffsetY = `${offsetY}`;
+  container.dataset.draggingItemHeight = `${itemHeight}`;
+  container.dataset.draggingItemWidth = `${itemWidth}`;
+  container.dataset.draggingItemLeft = `${itemLeft}`;
+  container.dataset.draggingPointerY = `${pointerY}`;
+};
+
+const setDraggingPointerY = (container: ApplicationRootElement, pointerY: number) => {
+  container.dataset.draggingPointerY = `${pointerY}`;
+};
+
+const setLastReorderDirection = (container: ApplicationRootElement, direction: 'up' | 'down') => {
+  container.dataset.lastReorderDirection = direction;
+};
+
 const clearDraggingIdentifier = (container: ApplicationRootElement) => {
   delete container.dataset.draggingEntryId;
+  delete container.dataset.draggingOffsetY;
+  delete container.dataset.draggingItemHeight;
+  delete container.dataset.draggingItemWidth;
+  delete container.dataset.draggingItemLeft;
+  delete container.dataset.draggingPointerY;
+  delete container.dataset.lastReorderDirection;
+};
+
+const createTransparentDragImage = () => {
+  const canvas = document.createElement('canvas');
+
+  canvas.width = 1;
+  canvas.height = 1;
+
+  return canvas;
+};
+
+const clearPreviewIdentifiers = (dragPreview: HTMLLIElement) => {
+  dragPreview.removeAttribute('id');
+  [...dragPreview.querySelectorAll<HTMLElement>('[id]')].forEach((element) => {
+    element.removeAttribute('id');
+  });
+};
+
+const createDragPreview = (historyItem: HTMLLIElement) => {
+  const dragPreview = historyItem.cloneNode(true);
+
+  if (!(dragPreview instanceof HTMLLIElement)) {
+    return null;
+  }
+
+  clearPreviewIdentifiers(dragPreview);
+  dragPreview.id = DRAG_PREVIEW_ELEMENT_ID;
+  dragPreview.classList.add('history-list__item--drag-preview');
+
+  return dragPreview;
+};
+
+const updateDragPreviewPosition = (
+  container: ApplicationRootElement,
+  pointerClientY: number,
+) => {
+  const dragPreview = findDragPreview();
+
+  if (dragPreview === null) {
+    return;
+  }
+
+  const draggingOffsetY = getDraggingOffsetY(container);
+  const draggingItemLeft = getDraggingItemLeft(container);
+  const draggingItemWidth = getDraggingItemWidth(container);
+  const targetTop = pointerClientY - draggingOffsetY;
+
+  dragPreview.style.left = `${draggingItemLeft}px`;
+  dragPreview.style.top = `${targetTop}px`;
+  dragPreview.style.width = `${draggingItemWidth}px`;
+};
+
+const mountDragPreview = (
+  container: ApplicationRootElement,
+  historyItem: HTMLLIElement,
+  pointerClientY: number,
+) => {
+  const dragPreview = createDragPreview(historyItem);
+
+  if (dragPreview === null) {
+    return;
+  }
+
+  document.body.append(dragPreview);
+  updateDragPreviewPosition(container, pointerClientY);
+};
+
+const removeDragPreview = () => {
+  findDragPreview()?.remove();
+};
+
+const getHistoryItemPositions = (historyList: HTMLUListElement) =>
+  new Map(
+    [...historyList.querySelectorAll<HTMLLIElement>('.history-list__item')].map((item) => [
+      item.id,
+      item.getBoundingClientRect().top,
+    ]),
+  );
+
+const clearHistoryItemReorderStyle = (historyItem: HTMLLIElement) => {
+  historyItem.style.transition = '';
+  historyItem.style.translate = '';
+};
+
+const animateHistoryListReorder = (
+  historyList: HTMLUListElement,
+  previousPositions: ReadonlyMap<string, number>,
+) => {
+  [...historyList.querySelectorAll<HTMLLIElement>('.history-list__item')].forEach((historyItem) => {
+    if (historyItem.dataset.dragging === 'true') {
+      return;
+    }
+
+    const previousTop = previousPositions.get(historyItem.id);
+
+    if (previousTop === undefined) {
+      return;
+    }
+
+    const currentTop = historyItem.getBoundingClientRect().top;
+    const deltaY = previousTop - currentTop;
+
+    if (deltaY === 0) {
+      return;
+    }
+
+    clearHistoryItemReorderStyle(historyItem);
+    historyItem.style.transition = 'none';
+    historyItem.style.translate = `0 ${deltaY}px`;
+
+    requestAnimationFrame(() => {
+      historyItem.style.transition = `translate ${HISTORY_REORDER_DURATION_MS}ms ${HISTORY_REORDER_EASING}`;
+      historyItem.style.translate = '';
+
+      window.setTimeout(() => {
+        clearHistoryItemReorderStyle(historyItem);
+      }, HISTORY_REORDER_DURATION_MS);
+    });
+  });
+};
+
+const getPreviousHistoryItem = (historyItem: HTMLLIElement) => {
+  const previousElement = historyItem.previousElementSibling;
+
+  return previousElement instanceof HTMLLIElement ? previousElement : null;
+};
+
+const getNextHistoryItem = (historyItem: HTMLLIElement) => {
+  const nextElement = historyItem.nextElementSibling;
+
+  return nextElement instanceof HTMLLIElement ? nextElement : null;
+};
+
+const clampDragImageOffset = (offset: number, size: number) =>
+  Math.max(0, Math.min(offset, size));
+
+const getDragImageOffset = (event: DragEvent, historyItem: HTMLLIElement) => {
+  const historyItemRect = historyItem.getBoundingClientRect();
+  const offsetX = clampDragImageOffset(event.clientX - historyItemRect.left, historyItem.clientWidth);
+  const offsetY = clampDragImageOffset(event.clientY - historyItemRect.top, historyItem.clientHeight);
+
+  return {
+    offsetX,
+    offsetY,
+  };
 };
 
 const escapeHtml = (value: string) =>
@@ -158,35 +356,64 @@ const getOrderedEntryIdentifiersFromDom = (container: ApplicationRootElement) =>
 const moveHistoryItemInDom = (
   container: ApplicationRootElement,
   sourceIdentifier: string,
-  targetIdentifier: string,
   pointerClientY: number,
 ) => {
   const historyList = findHistoryList(container);
 
-  if (historyList === null || sourceIdentifier === targetIdentifier) {
+  if (historyList === null || sourceIdentifier === '') {
     return;
   }
 
   const sourceItem = historyList.querySelector<HTMLLIElement>(
     `#${createHistoryItemId(sourceIdentifier)}`,
   );
-  const targetItem = historyList.querySelector<HTMLLIElement>(
-    `#${createHistoryItemId(targetIdentifier)}`,
-  );
 
-  if (sourceItem === null || targetItem === null || sourceItem === targetItem) {
+  if (sourceItem === null) {
     return;
   }
 
-  const targetRect = targetItem.getBoundingClientRect();
-  const shouldInsertAfter = pointerClientY >= targetRect.top + targetRect.height / 2;
-  const nextSibling = shouldInsertAfter ? targetItem.nextElementSibling : targetItem;
-  const shouldKeepPosition =
-    nextSibling === sourceItem || targetItem.previousElementSibling === sourceItem;
+  const draggingOffsetY = getDraggingOffsetY(container);
+  const draggingItemHeight = getDraggingItemHeight(container);
+  const previousPointerY = getDraggingPointerY(container);
+  const lastReorderDirection = getLastReorderDirection(container);
+  const pointerDirection =
+    pointerClientY < previousPointerY ? 'up' : pointerClientY > previousPointerY ? 'down' : 'still';
+  const targetTop = pointerClientY - draggingOffsetY;
+  const targetBottom = targetTop + draggingItemHeight;
+  const previousHistoryItem = getPreviousHistoryItem(sourceItem);
+  const nextHistoryItem = getNextHistoryItem(sourceItem);
+  const previousBottom = previousHistoryItem?.getBoundingClientRect().bottom;
+  const nextTop = nextHistoryItem?.getBoundingClientRect().top;
 
-  if (!shouldKeepPosition) {
-    historyList.insertBefore(sourceItem, nextSibling);
+  if (
+    previousHistoryItem !== null &&
+    previousBottom !== undefined &&
+    targetTop <= previousBottom &&
+    !(lastReorderDirection === 'down' && pointerDirection !== 'up')
+  ) {
+    const previousPositions = getHistoryItemPositions(historyList);
+
+    historyList.insertBefore(sourceItem, previousHistoryItem);
+    animateHistoryListReorder(historyList, previousPositions);
+    setLastReorderDirection(container, 'up');
+    setDraggingPointerY(container, pointerClientY);
+    return;
   }
+
+  if (
+    nextHistoryItem !== null &&
+    nextTop !== undefined &&
+    targetBottom >= nextTop &&
+    !(lastReorderDirection === 'up' && pointerDirection !== 'down')
+  ) {
+    const previousPositions = getHistoryItemPositions(historyList);
+
+    historyList.insertBefore(sourceItem, nextHistoryItem.nextElementSibling);
+    animateHistoryListReorder(historyList, previousPositions);
+    setLastReorderDirection(container, 'down');
+  }
+
+  setDraggingPointerY(container, pointerClientY);
 };
 
 const focusSearchInput = (container: ApplicationRootElement) => {
@@ -310,6 +537,7 @@ const bindHistoryEntryEvents = (container: ApplicationRootElement, entry: Search
   const historyLink = findHistoryLink(container, entry.id);
   const historyDeleteButton = findHistoryDeleteButton(container, entry.id);
   const historyDragButton = findHistoryDragButton(container, entry.id);
+  const historyItem = findHistoryItem(container, entry.id);
 
   historyLink?.addEventListener('click', (event: MouseEvent) => {
     event.preventDefault();
@@ -327,16 +555,37 @@ const bindHistoryEntryEvents = (container: ApplicationRootElement, entry: Search
 
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', entry.id);
+    if (historyItem !== null) {
+      const { offsetY } = getDragImageOffset(event, historyItem);
+      const historyItemRect = historyItem.getBoundingClientRect();
+
+      setDraggingMetrics(
+        container,
+        offsetY,
+        historyItem.clientHeight,
+        historyItem.clientWidth,
+        historyItemRect.left,
+        event.clientY,
+      );
+      mountDragPreview(container, historyItem, event.clientY);
+      event.dataTransfer.setDragImage(
+        createTransparentDragImage(),
+        0,
+        0,
+      );
+      historyItem.setAttribute('data-dragging', 'true');
+    }
     setDraggingIdentifier(container, entry.id);
-    findHistoryItem(container, entry.id)?.setAttribute('data-dragging', 'true');
   });
 
   historyDragButton?.addEventListener('dragend', () => {
-    findHistoryItem(container, entry.id)?.removeAttribute('data-dragging');
+    if (historyItem !== null) {
+      historyItem.removeAttribute('data-dragging');
+    }
+
+    removeDragPreview();
     clearDraggingIdentifier(container);
   });
-
-  const historyItem = findHistoryItem(container, entry.id);
 
   historyItem?.addEventListener('dragover', (event: DragEvent) => {
     if (event.dataTransfer === null) {
@@ -345,12 +594,8 @@ const bindHistoryEntryEvents = (container: ApplicationRootElement, entry: Search
 
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
-    moveHistoryItemInDom(
-      container,
-      getDraggingIdentifier(container),
-      entry.id,
-      event.clientY,
-    );
+    updateDragPreviewPosition(container, event.clientY);
+    moveHistoryItemInDom(container, getDraggingIdentifier(container), event.clientY);
   });
 
   historyItem?.addEventListener('drop', (event: DragEvent) => {
@@ -359,13 +604,10 @@ const bindHistoryEntryEvents = (container: ApplicationRootElement, entry: Search
     }
 
     event.preventDefault();
-    moveHistoryItemInDom(
-      container,
-      event.dataTransfer.getData('text/plain'),
-      entry.id,
-      event.clientY,
-    );
+    updateDragPreviewPosition(container, event.clientY);
+    moveHistoryItemInDom(container, event.dataTransfer.getData('text/plain'), event.clientY);
     reorderHistoryEntriesFromDom(container);
+    removeDragPreview();
     clearDraggingIdentifier(container);
   });
 };
